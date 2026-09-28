@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Onyx — an AI assistant that lives inside Telegram. No apps, no tabs. Just a message.">
+<title>Onyx — AI that lives in Telegram</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Cpath d='M44 4L22 26' stroke='%235ac8fa' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M44 4L30 44l-8-18L4 18z' fill='none' stroke='%235ac8fa' stroke-width='4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --bg:#000;
+  --ink:#f5f5f7;
+  --ink-dim:rgba(245,245,247,.55);
+  --ink-faint:rgba(245,245,247,.3);
+  --hair:rgba(255,255,255,.08);
+  --hair-strong:rgba(255,255,255,.14);
+  --accent:#5ac8fa;
+  --accent-soft:rgba(90,200,250,.12);
+  --accent-border:rgba(90,200,250,.28);
+  --glass:rgba(255,255,255,.045);
+  --glass-strong:rgba(255,255,255,.08);
+  --font-display:'Space Grotesk',sans-serif;
+  --font-mono:'Space Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:var(--font-display);font-size:16px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+::selection{background:rgba(90,200,250,.32);color:#fff}
+:focus-visible{outline:2px solid rgba(90,200,250,.65);outline-offset:3px;border-radius:6px}
+::-webkit-scrollbar{width:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:99px}
+a{color:inherit}
+button{font-family:inherit;cursor:pointer}
+
+/* ============ ATMOSPHERE (light behind the glass) ============ */
+.ambient{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.ambient i{position:absolute;border-radius:50%;filter:blur(90px)}
+.blob-a{width:56vw;height:56vw;top:-16vw;right:-12vw;
+  background:radial-gradient(circle at 38% 38%,rgba(90,200,250,.13),rgba(90,200,250,0) 62%);
+  animation:driftA 44s ease-in-out infinite alternate}
+.blob-b{width:36vw;height:36vw;bottom:-10vw;left:-8vw;
+  background:radial-gradient(circle at 60% 40%,rgba(255,208,160,.055),rgba(255,208,160,0) 60%);
+  animation:driftB 58s ease-in-out infinite alternate}
+@keyframes driftA{from{transform:translate(0,0) scale(1)}to{transform:translate(-6vw,8vw) scale(1.15)}}
+@keyframes driftB{from{transform:translate(0,0) scale(1)}to{transform:translate(5vw,-6vw) scale(1.1)}}
+
+.cursor-light{position:fixed;top:0;left:0;width:640px;height:640px;border-radius:50%;
+  pointer-events:none;z-index:1;mix-blend-mode:screen;
+  background:radial-gradient(circle,rgba(90,200,250,.065),rgba(90,200,250,.02) 42%,transparent 66%)}
+@media (hover:none){.cursor-light{display:none}}
+
+.grain{position:fixed;inset:-60%;z-index:90;pointer-events:none;opacity:.035;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grainShift 7s linear infinite}
+@keyframes grainShift{
+  0%{transform:translate(0,0)}14%{transform:translate(-1.5%,1%)}28%{transform:translate(1%,-1.5%)}
+  42%{transform:translate(-1%,-1%)}56%{transform:translate(1.5%,.5%)}70%{transform:translate(-.5%,1.5%)}
+  84%{transform:translate(1%,1%)}100%{transform:translate(0,0)}}
+
+/* ============ NAV ============ */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;transition:background-color .35s,border-color .35s;
+  border-bottom:1px solid transparent}
+nav.scrolled{background:rgba(5,5,8,.6);-webkit-backdrop-filter:blur(20px) saturate(160%);
+  backdrop-filter:blur(20px) saturate(160%);border-bottom-color:var(--hair)}
+.nav-inner{max-width:1320px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:16px 5vw}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none}
+.brand-mark{width:27px;height:27px;border-radius:8px;background:var(--accent-soft);
+  border:1px solid var(--accent-border);display:grid;place-items:center;color:var(--accent)}
+.brand-name{font-weight:600;font-size:17px;letter-spacing:.01em}
+.nav-links{display:flex;align-items:center;gap:30px}
+.nav-links a{font-size:14px;font-weight:500;color:var(--ink-dim);text-decoration:none;
+  position:relative;transition:color .25s}
+.nav-links a::after{content:'';position:absolute;left:0;bottom:-5px;height:1px;width:100%;
+  background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .3s}
+.nav-links a:hover{color:var(--ink)}
+.nav-links a:hover::after{transform:scaleX(1)}
+.btn-nav{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:12px;
+  background:var(--accent-soft);border:1px solid var(--accent-border);color:var(--accent);
+  font-size:13.5px;font-weight:500;text-decoration:none;transition:background .25s,transform .25s}
+.btn-nav:hover{background:rgba(90,200,250,.2);transform:translateY(-1px)}
+
+/* ============ HERO ============ */
+.hero{position:relative;z-index:5;max-width:1440px;margin:0 auto;
+  min-height:100vh;display:grid;grid-template-columns:1.05fr .95fr;gap:3vw;
+  align-items:center;padding:130px 6vw 70px}
+.hero-copy{position:relative;z-index:2}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font:400 11px var(--font-mono);
+  letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:pulseDot 2.4s infinite}
+@keyframes pulseDot{
+  0%{box-shadow:0 0 0 0 rgba(90,200,250,.5)}
+  70%{box-shadow:0 0 0 8px rgba(90,200,250,0)}
+  100%{box-shadow:0 0 0 0 rgba(90,200,250,0)}}
+h1{font-size:clamp(42px,5.4vw,84px);font-weight:600;line-height:1.03;
+  letter-spacing:-.03em;margin:26px 0 24px}
+.h1-checks{width:.9em;height:.5em;margin-left:.07em;vertical-align:-.015em;overflow:visible}
+.h1-checks path{stroke:var(--accent);stroke-width:2.6;fill:none;stroke-linecap:round;
+  stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;animation:draw .55s ease forwards}
+.h1-checks path:nth-child(1){animation-delay:1s}
+.h1-checks path:nth-child(2){animation-delay:1.3s}
+@keyframes draw{to{stroke-dashoffset:0}}
+.hero-sub{max-width:50ch;color:var(--ink-dim);font-size:17.5px;line-height:1.65}
+.hero-cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:40px}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:15px 26px;border-radius:16px;
+  font-family:var(--font-display);font-size:15.5px;font-weight:500;border:1px solid transparent;
+  text-decoration:none;transition:transform .25s,box-shadow .25s,background .25s,border-color .25s}
+.btn svg{flex:none}
+.btn-primary{background:var(--accent);color:#04141c}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 44px rgba(90,200,250,.28)}
+.btn-primary:active{transform:translateY(0) scale(.98)}
+.btn-ghost{background:var(--glass);border-color:var(--hair);color:var(--ink);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.btn-ghost:hover{background:var(--glass-strong);border-color:var(--hair-strong);transform:translateY(-2px)}
+.hero-note{margin-top:26px;font:400 10.5px var(--font-mono);letter-spacing:.18em;
+  color:var(--ink-faint);text-transform:uppercase}
+.fade{opacity:0;transform:translateY(24px);animation:fadeUp .9s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes fadeUp{to{opacity:1;transform:none}}
+
+/* --- phone visual --- */
+.hero-visual{position:relative;display:flex;flex-direction:column;align-items:center;z-index:2}
+.ring{position:absolute;top:50%;left:50%;border-radius:50%;pointer-events:none}
+.ring-1{width:600px;height:600px;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.055)}
+.ring-2{width:860px;height:860px;transform:translate(-50%,-50%);border:1px solid rgba(255,255,255,.035)}
+.ring-3{width:730px;height:730px;transform:translate(-50%,-50%);
+  border:1px dashed rgba(255,255,255,.05);animation:spin 90s linear infinite}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.device-wrap{perspective:1400px;position:relative;z-index:2;opacity:0;
+  animation:fadeUp 1s .35s cubic-bezier(.2,.7,.2,1) forwards}
+.device-float{animation:floaty 7.5s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-13px) rotate(.4deg)}}
+.device-hint{margin-top:26px;display:inline-flex;align-items:center;gap:9px;
+  font:400 10.5px var(--font-mono);letter-spacing:.2em;color:var(--ink-faint);text-transform:uppercase}
+
+/* --- the phone itself --- */
+.phone{width:370px;width:min(370px,88vw,calc((100vh - 150px)*.4875));
+  aspect-ratio:390/800;background:#0b0b0e;border:1px solid var(--hair-strong);
+  border-radius:56px;padding:10px;position:relative;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 40px 90px rgba(0,0,0,.7)}
+.screen{position:relative;height:100%;border-radius:47px;overflow:hidden;background:#000;
+  border:1px solid rgba(255,255,255,.05);display:flex;flex-direction:column}
+.notch{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:110px;height:30px;
+  background:#000;border-radius:18px;border:1px solid rgba(255,255,255,.06);z-index:20}
+.home-bar{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:118px;height:4px;
+  border-radius:99px;background:rgba(255,255,255,.28);z-index:20;pointer-events:none}
+.statusbar{display:flex;justify-content:space-between;align-items:center;
+  padding:16px 28px 4px;font-size:14px;font-weight:600}
+.sb-icons{display:flex;align-items:center;gap:6px}
+
+.chat-head{display:flex;align-items:center;gap:10px;padding:9px 14px 10px;
+  background:rgba(10,10,14,.55);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--hair)}
+.chat-head .chev{color:var(--ink-dim);display:grid;place-items:center;background:none;border:none;padding:4px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--accent-soft);
+  border:1px solid var(--accent-border);display:grid;place-items:center;color:var(--accent);flex:none}
+.ch-meta{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.ch-meta strong{font-size:15px;font-weight:600}
+.ch-status{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-dim)}
+.ch-status em{font-style:normal}
+.ch-status.typing em{color:var(--accent)}
+.dot-on{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulseDot 2.4s infinite}
+.chat-head .more{margin-left:auto;color:var(--ink-dim);display:grid;place-items:center;
+  background:none;border:none;padding:6px}
+
+.chat-log{flex:1;min-height:0;overflow-y:auto;padding:14px 12px 8px;display:flex;
+  flex-direction:column;gap:4px;scroll-behavior:smooth;scrollbar-width:none}
+.chat-log::-webkit-scrollbar{display:none}
+.msg{max-width:78%;padding:9px 13px 6px;border-radius:19px;font-size:14.5px;line-height:1.45;
+  animation:msgIn .38s cubic-bezier(.2,.9,.3,1.15) both;word-wrap:break-word}
+@keyframes msgIn{from{opacity:0;transform:translateY(10px) scale(.95)}to{opacity:1;transform:none}}
+.msg-body b{font-weight:600;color:#fff}
+.msg.in{align-self:flex-start;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.06);border-bottom-left-radius:7px}
+.msg.out{align-self:flex-end;background:rgba(90,200,250,.16);
+  border:1px solid rgba(90,200,250,.22);border-bottom-right-radius:7px;color:#eaf7ff}
+.msg.out .msg-body b{color:#fff}
+.msg .meta{display:flex;justify-content:flex-end;align-items:center;gap:5px;margin-top:3px;
+  font:400 10px var(--font-mono);color:var(--ink-faint)}
+.msg.out .meta{color:rgba(190,230,250,.55)}
+.msg.out .meta svg{color:var(--accent)}
+.msg.system{align-self:center;max-width:92%;text-align:center;font:400 10.5px var(--font-mono);
+  color:var(--ink-dim);background:rgba(255,255,255,.05);border:1px solid var(--hair);
+  border-radius:999px;padding:7px 15px;letter-spacing:.05em}
+.msg.typing{display:flex;gap:5px;align-items:center;padding:14px 16px}
+.msg.typing i{width:7px;height:7px;border-radius:50%;background:rgba(245,245,247,.5);
+  animation:blink 1.2s infinite ease-in-out}
+.msg.typing i:nth-child(2){animation-delay:.15s}
+.msg.typing i:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+
+.chat-input{display:flex;gap:8px;align-items:center;padding:10px 14px 24px;
+  background:rgba(10,10,14,.6);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  border-top:1px solid var(--hair)}
+.chat-input input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid var(--hair);
+  border-radius:18px;color:var(--ink);padding:10px 16px;font:400 14.5px var(--font-display);
+  outline:none;transition:border-color .25s,background .25s}
+.chat-input input::placeholder{color:var(--ink-faint)}
+.chat-input input:focus{border-color:rgba(90,200,250,.45);background:rgba(255,255,255,.09)}
+.send-btn{width:38px;height:38px;flex:none;border-radius:50%;background:var(--accent);
+  border:none;color:#04141c;display:grid;place-items:center;transition:transform .2s,box-shadow .2s}
+.send-btn:hover{transform:scale(1.07);box-shadow:0 6px 22px rgba(90,200,250,.35)}
+.send-btn:active{transform:scale(.9)}
+
+/* ============ TICKER ============ */
+.ticker{position:relative;z-index:5;overflow:hidden;padding:15px 0;
+  border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);background:rgba(255,255,255,.015)}
+.ticker-track{display:flex;width:max-content;animation:tick 60s linear infinite}
+.ticker:hover .ticker-track{animation-play-state:paused}
+@keyframes tick{to{transform:translateX(-25%)}}
+.ticker-group{display:flex;align-items:center;gap:0;padding-right:42px;flex:none}
+.ticker-group span{font:400 11.5px var(--font-mono);letter-spacing:.2em;text-transform:uppercase;
+  color:var(--ink-faint);white-space:nowrap;padding:0 21px}
+.ticker-group i{color:rgba(90,200,250,.45);font-style:normal}
+
+/* ============ SECTIONS ============ */
+.section{position:relative;z-index:5;max-width:1180px;margin:0 auto;padding:110px 6vw}
+.kicker{display:flex;align-items:center;gap:12px;font:400 11px var(--font-mono);
+  letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim)}
+.kicker::before{content:'';width:30px;height:1px;background:var(--accent)}
+h2{font-size:clamp(32px,3.7vw,54px);font-weight:600;letter-spacing:-.025em;
+  line-height:1.08;margin:16px 0 14px}
+.lede{color:var(--ink-dim);font-size:16.5px;line-height:1.65;max-width:56ch}
+
+/* --- capabilities: editorial numbered rows --- */
+.cap-list{margin-top:54px;border-top:1px solid var(--hair)}
+.cap{position:relative;display:grid;grid-template-columns:76px 1fr 56px;gap:26px;
+  align-items:center;padding:34px 20px;border-bottom:1px solid var(--hair);
+  transition:background .35s}
+.cap::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .4s;pointer-events:none;
+  background:radial-gradient(380px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.06),transparent 62%)}
+.cap:hover{background:rgba(255,255,255,.024)}
+.cap:hover::before{opacity:1}
+.cap-num{font:400 13px var(--font-mono);color:var(--ink-faint);transition:color .3s}
+.cap:hover .cap-num{color:var(--accent)}
+.cap h3{font-size:clamp(20px,2vw,26px);font-weight:600;letter-spacing:-.01em;margin-bottom:8px}
+.cap p{color:var(--ink-dim);font-size:15.5px;line-height:1.6;max-width:58ch}
+.cap-icon{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;
+  color:var(--ink-dim);border:1px solid var(--hair);background:var(--glass);
+  transition:color .3s,border-color .3s,transform .3s}
+.cap:hover .cap-icon{color:var(--accent);border-color:var(--accent-border);transform:translateY(-3px)}
+
+/* --- how it works --- */
+.how-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:6vw;align-items:start}
+.how-note{margin-top:34px;font:400 10.5px var(--font-mono);letter-spacing:.18em;
+  color:var(--ink-faint);text-transform:uppercase}
+.log-panel{position:relative;border-radius:28px;padding:26px 28px;
+  background:var(--glass);border:1px solid var(--hair);
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+.log-panel::before{content:'';position:absolute;inset:0;border-radius:28px;opacity:0;
+  transition:opacity .4s;pointer-events:none;
+  background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.05),transparent 60%)}
+.log-panel:hover::before{opacity:1}
+.log-panel>*{position:relative}
+.log-head{display:flex;align-items:center;gap:10px;font:400 10.5px var(--font-mono);
+  letter-spacing:.18em;color:var(--ink-dim);padding-bottom:16px;margin-bottom:16px;
+  border-bottom:1px solid var(--hair)}
+.log-head .right{margin-left:auto;color:var(--ink-faint)}
+.log-body{display:flex;flex-direction:column;gap:5px;padding-top:6px}
+.tl-gap{display:flex;align-items:center;gap:14px;margin:12px 0 4px;
+  font:400 10px var(--font-mono);letter-spacing:.2em;color:var(--ink-faint)}
+.tl-gap::before,.tl-gap::after{content:'';flex:1;height:1px;background:var(--hair)}
+.log-panel .msg.in{background:rgba(255,255,255,.055)}
+.log-end{display:flex;align-items:center;gap:14px;margin-top:18px;
+  font:400 10px var(--font-mono);letter-spacing:.2em;color:var(--ink-faint)}
+.log-end::before,.log-end::after{content:'';flex:1;height:1px;background:var(--hair)}
+
+/* --- stats strip --- */
+.stats-wrap{position:relative;z-index:5;border-top:1px solid var(--hair);
+  border-bottom:1px solid var(--hair);background:rgba(255,255,255,.015)}
+.stats{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+.stat{padding:38px 34px;border-left:1px solid var(--hair)}
+.stat:first-child{border-left:none}
+.stat-num{font-size:clamp(34px,3.6vw,52px);font-weight:600;letter-spacing:-.02em;line-height:1}
+.stat-num .u{color:var(--accent)}
+.stat-label{margin-top:12px;font:400 10.5px var(--font-mono);letter-spacing:.18em;
+  text-transform:uppercase;color:var(--ink-dim)}
+
+/* --- CTA --- */
+.cta-panel{position:relative;border-radius:36px;padding:96px 40px;text-align:center;overflow:hidden;
+  background:rgba(255,255,255,.03);border:1px solid var(--hair);
+  -webkit-backdrop-filter:blur(24px) saturate(150%);backdrop-filter:blur(24px) saturate(150%)}
+.cta-panel::before{content:'';position:absolute;top:-45%;left:50%;transform:translateX(-50%);
+  width:72%;height:90%;pointer-events:none;
+  background:radial-gradient(ellipse at center,rgba(90,200,250,.11),transparent 65%)}
+.cta-panel::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s;
+  background:radial-gradient(460px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.05),transparent 60%)}
+.cta-panel:hover::after{opacity:1}
+.cta-panel>*{position:relative}
+.cta-panel h2{margin-bottom:14px}
+.cmd{font-family:var(--font-mono);color:var(--accent);font-size:.8em;
+  border:1px solid var(--accent-border);border-radius:9px;padding:.02em .2em;letter-spacing:0}
+.cta-panel .lede{margin:0 auto}
+.cta-btns{display:flex;justify-content:center;flex-wrap:wrap;gap:14px;margin-top:38px}
+.cta-small{margin-top:24px;font:400 10px var(--font-mono);letter-spacing:.2em;
+  color:var(--ink-faint);text-transform:uppercase}
+
+/* --- footer --- */
+footer{position:relative;z-index:5;border-top:1px solid var(--hair);
+  padding:38px 6vw 54px;max-width:1440px;margin:0 auto;
+  display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+footer .brand-name{font-size:15px}
+footer .fine{font:400 10.5px var(--font-mono);letter-spacing:.14em;color:var(--ink-faint);
+  text-transform:uppercase;text-align:right}
+
+/* --- toast --- */
+.toast{position:fixed;left:50%;bottom:34px;z-index:200;transform:translate(-50%,90px);opacity:0;
+  display:flex;align-items:center;gap:11px;padding:13px 22px;border-radius:16px;
+  background:rgba(18,18,24,.72);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.13);font-size:13.5px;color:var(--ink);
+  pointer-events:none;transition:transform .45s cubic-bezier(.2,.9,.3,1.1),opacity .45s}
+.toast.show{transform:translate(-50%,0);opacity:1}
+.toast svg{color:var(--accent)}
+
+/* --- scroll reveal --- */
+.reveal{opacity:0;transform:translateY(26px);filter:blur(8px);
+  transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1),filter .8s;
+  transition-delay:var(--d,0s)}
+.reveal.in{opacity:1;transform:none;filter:none}
+
+/* ============ RESPONSIVE ============ */
+@media (max-width:960px){
+  .hero{grid-template-columns:1fr;padding-top:118px;gap:20px;min-height:auto}
+  .hero-visual{margin-top:44px}
+  .ring-2,.ring-3{display:none}
+  .how-grid{grid-template-columns:1fr;gap:48px}
+  .log-panel{max-width:560px}
+}
+@media (max-width:760px){
+  .nav-links{display:none}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat:nth-child(odd){border-left:none}
+  .stat:nth-child(n+3){border-top:1px solid var(--hair)}
+  .stat{padding:28px 24px}
+}
+@media (max-width:620px){
+  .cap{grid-template-columns:1fr;gap:10px;padding:28px 6px}
+  .cap-icon{display:none}
+  .cap-num{order:-1}
+  .cta-panel{padding:70px 24px}
+  footer{flex-direction:column;align-items:flex-start}
+  footer .fine{text-align:left}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  .cursor-light,.grain{display:none}
+}
+</style>
+</head>
+<body id="top">
+
+<!-- atmosphere -->
+<div class="ambient" id="ambient"><i class="blob-a"></i><i class="blob-b"></i></div>
+<div class="cursor-light" id="cursorLight"></div>
+<div class="grain"></div>
+
+<!-- ============ NAV ============ -->
+<nav id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 22-7z"/></svg>
+      </span>
+      <span class="brand-name">Onyx</span>
+    </a>
+    <div class="nav-links">
+      <a href="#capabilities">Capabilities</a>
+      <a href="#how">How it works</a>
+      <a href="#start">Start</a>
+    </div>
+    <a class="btn-nav" href="https://t.me/onyx_ai_bot" target="_blank" rel="noopener">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 22-7z"/></svg>
+      Open bot
+    </a>
+  </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="hero">
+  <div class="hero-copy">
+    <span class="eyebrow fade" style="animation-delay:.05s"><i class="live-dot"></i>@onyx_ai_bot — live on Telegram</span>
+    <h1 class="fade" style="animation-delay:.18s">Intelligence,<br>delivered<svg class="h1-checks" viewBox="0 0 34 18" aria-hidden="true"><path d="M2 10l5 5 9-11"/><path d="M12 10l5 5 9-11"/></svg><br>like a message.</h1>
+    <p class="hero-sub fade" style="animation-delay:.32s">Onyx is an AI assistant that lives inside Telegram — no new apps, no extra tabs. You message it the way you'd message a friend, and it thinks before it replies.</p>
+    <div class="hero-cta fade" style="animation-delay:.46s">
+      <a class="btn btn-primary" href="https://t.me/onyx_ai_bot" target="_blank" rel="noopener">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 22-7z"/></svg>
+        Open in Telegram
+      </a>
+      <button class="btn btn-ghost" id="replayBtn" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        Replay the demo
+      </button>
+    </div>
+    <p class="hero-note fade" style="animation-delay:.6s">Free during beta — no signup, no card</p>
+  </div>
+
+  <div class="hero-visual">
+    <span class="ring ring-1"></span><span class="ring ring-2"></span><span class="ring ring-3"></span>
+
+    <div class="device-wrap">
+      <div class="device-float">
+        <div class="device" id="device">
+          <div class="phone">
+            <div class="screen">
+              <div class="notch"></div>
+
+              <div class="statusbar">
+                <span id="sbTime">9:41</span>
+                <span class="sb-icons">
+                  <svg width="17" height="11" viewBox="0 0 18 12" fill="rgba(255,255,255,.9)"><rect y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" width="3" height="12" rx="1" fill="rgba(255,255,255,.35)"/></svg>
+                  <svg width="17" height="12" viewBox="0 0 17 12" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.7" stroke-linecap="round"><path d="M1.5 4a11 11 0 0114 0"/><path d="M4.3 7a7 7 0 018.4 0"/><circle cx="8.5" cy="10" r="1.2" fill="rgba(255,255,255,.9)" stroke="none"/></svg>
+                  <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x=".5" y=".5" width="21" height="11" rx="3" stroke="rgba(255,255,255,.4)"/><rect x="2" y="2" width="14" height="8" rx="1.8" fill="rgba(255,255,255,.9)"/><path d="M23.5 4v4" stroke="rgba(255,255,255,.4)" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </span>
+              </div>
+
+              <div class="chat-head">
+                <button class="chev" type="button" aria-label="Back">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <span class="avatar">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 22-7z"/></svg>
+                </span>
+                <span class="ch-meta">
+                  <strong>Onyx</strong>
+                  <span class="ch-status" id="chStatus"><i class="dot-on"></i><em id="statusText">online</em></span>
+                </span>
+                <button class="more" type="button" aria-label="More">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+                </button>
+              </div>
+
+              <div class="chat-log" id="chatLog"></div>
+
+              <form class="chat-input" id="chatForm">
+                <input id="chatField" placeholder="Message" autocomplete="off" maxlength="200">
+                <button class="send-btn" type="submit" aria-label="Send message">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 22-7z"/></svg>
+                </button>
+              </form>
+
+              <span class="home-bar"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <span class="device-hint"><i class="live-dot"></i>Live demo — try typing</span>
+  </div>
+</header>
+
+<!-- ============ TICKER ============ -->
+<div class="ticker" aria-hidden="true">
+  <div class="ticker-track" id="tickerTrack">
+    <div class="ticker-group">
+      <span>Ask anything</span><i>&middot;</i><span>Draft &amp; rewrite</span><i>&middot;</i>
+      <span>Translate 40+ languages</span><i>&middot;</i><span>Summarize links</span><i>&middot;</i>
+      <span>Brainstorm</span><i>&middot;</i><span>Debug code</span><i>&middot;</i>
+      <span>Plan your day</span><i>&middot;</i><span>Explain like I'm five</span><i>&middot;</i>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CAPABILITIES ============ -->
+<section class="section" id="capabilities">
+  <div class="reveal">
+    <span class="kicker">Capabilities</span>
+    <h2>Small talk, tall orders.</h2>
+    <p class="lede">Everything Onyx does happens inside the thread you already have open. No modes to switch, no forms to fill — just language.</p>
+  </div>
+
+  <div class="cap-list">
+    <div class="cap sheen reveal">
+      <span class="cap-num">/ 01</span>
+      <div>
+        <h3>Thinks in threads</h3>
+        <p>Remembers the whole conversation, not just the last message. Ask "go deeper on point two" — it keeps up.</p>
+      </div>
+      <span class="cap-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+    </div>
+    <div class="cap sheen reveal" style="--d:.06s">
+      <span class="cap-num">/ 02</span>
+      <div>
+        <h3>Drafts, not just answers</h3>
+        <p>Emails, captions, replies, release notes. Give it a voice and a constraint, get back something shippable.</p>
+      </div>
+      <span class="cap-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></span>
+    </div>
+    <div class="cap sheen reveal" style="--d:.12s">
+      <span class="cap-num">/ 03</span>
+      <div>
+        <h3>40+ languages, one tone</h3>
+        <p>Translation that preserves intent and register — from Slack casual to contract formal.</p>
+      </div>
+      <span class="cap-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></span>
+    </div>
+    <div class="cap sheen reveal" style="--d:.18s">
+      <span class="cap-num">/ 04</span>
+      <div>
+        <h3>Private by default</h3>
+        <p>Nothing you write trains it. Threads fade when you leave them. No accounts, no email, no wallet.</p>
+      </div>
+      <span class="cap-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+    </div>
+    <div class="cap sheen reveal" style="--d:.24s">
+      <span class="cap-num">/ 05</span>
+      <div>
+        <h3>Fast enough to feel alive</h3>
+        <p>Median first token under a second. Onyx streams its thinking while it works, so you're never staring at silence.</p>
+      </div>
+      <span class="cap-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="section" id="how">
+  <div class="how-grid">
+    <div class="reveal">
+      <span class="kicker">How it works</span>
+      <h2>Liftoff in three messages.</h2>
+      <p class="lede">There's nothing to install and nothing to configure. Onboarding is a conversation — because the product is one.</p>
+      <p class="how-note">Median time to first useful answer — 41 seconds</p>
+    </div>
+
+    <div class="log-panel sheen reveal" style="--d:.1s">
+      <div class="log-head">
+        <i class="live-dot"></i>Transmission log
+        <span class="right">@onyx_ai_bot</span>
+      </div>
+      <div class="log-body">
+        <span class="tl-gap">T + 00:00</span>
+        <div class="msg in">
+          <div class="msg-body">Step 1 — Open the bot and press Start. That's the whole signup.</div>
+          <div class="meta">21:04</div>
+        </div>
+        <span class="tl-gap">T + 00:07</span>
+        <div class="msg in">
+          <div class="msg-body">Step 2 — Ask anything. Draft an email, translate a contract, argue about semicolons.</div>
+          <div class="meta">21:04</div>
+        </div>
+        <span class="tl-gap">T + 00:23</span>
+        <div class="msg out">
+          <div class="msg-body">Step 3 — There is no step 3. You're already working.</div>
+          <div class="meta">21:05
+            <svg width="15" height="10" viewBox="0 0 16 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M1 5.5l3 3L9.5 2.5"/><path d="M6.5 5.5l3 3L15 2.5"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="log-end">End of log — 3 messages &middot; 23 seconds</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STATS ============ -->
+<div class="stats-wrap">
+  <div class="stats">
+    <div class="stat reveal"><div class="stat-num"><span data-count data-from="0" data-to="24" data-suffix="/7">24/7</span></div><div class="stat-label">Always on</div></div>
+    <div class="stat reveal" style="--d:.08s"><div class="stat-num"><span data-count data-from="9" data-to="1" data-prefix="&lt;" data-suffix="s">&lt;1s</span></div><div class="stat-label">Median first reply</div></div>
+    <div class="stat reveal" style="--d:.16s"><div class="stat-num"><span data-count data-from="0" data-to="40" data-suffix="+">40+</span></div><div class="stat-label">Languages</div></div>
+    <div class="stat reveal" style="--d:.24s"><div class="stat-num"><span data-count data-from="128" data-to="0" data-suffix="">0</span></div><div class="stat-label">Chats stored</div></div>
+  </div>
+</div>
+
+<!-- ============ CTA ============ -->
+<section class="section" id="start">
+  <div class="cta-panel sheen reveal">
+    <span class="kicker" style="justify-content:center">Ready when you are</span>
+    <h2>Start with <span class="cmd">/start</span>.</h2>
+    <p class="lede">One message, and there's a second brain on the other side. It's free while in beta.</p>
+    <div class="cta-btns">
+      <a class="btn btn-primary" href="https://t.me/onyx_ai_bot" target="_blank" rel="noopener">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 22-7z"/></svg>
+        Message @onyx_ai_bot
+      </a>
+      <button class="btn btn-ghost" id="copyBtn" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Copy username
+      </button>
+    </div>
+    <p class="cta-small">Works in Telegram for iOS, Android, macOS &amp; Web</p>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <a class="brand" href="#top">
+    <span class="brand-mark">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 22-7z"/></svg>
+    </span>
+    <span class="brand-name">Onyx</span>
+  </a>
+  <span class="fine">&copy; 2025 Onyx Labs &middot; Not affiliated with Telegram FZ-LLC</span>
+</footer>
+
+<!-- toast -->
+<div class="toast" id="toast">
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+  <span></span>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const canHover = matchMedia('(hover:hover) and (pointer:fine)').matches;
+
+  /* ---------- ticker: clone groups for a seamless loop ---------- */
+  const track = $('#tickerTrack'), group = track.firstElementChild;
+  for (let i = 0; i < 3; i++) track.appendChild(group.cloneNode(true));
+
+  /* ---------- nav state ---------- */
+  const nav = $('#nav');
+  const onScroll = () => nav.classList.toggle('scrolled', (window.scrollY || 0) > 24);
+  window.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+  /* ---------- phone clock ---------- */
+  const sbTime = $('#sbTime');
+  const tickClock = () => {
+    const d = new Date();
+    sbTime.textContent = d.getHours() + ':' + String(d.getMinutes()).padStart(2,'0');
+  };
+  tickClock(); setInterval(tickClock, 20000);
+
+  /* ---------- cursor light + device tilt + ambient parallax (one rAF loop) ---------- */
+  const light = $('#cursorLight'), device = $('#device'),
+        hero = $('#hero'), ambient = $('#ambient');
+  let lx = innerWidth/2, ly = innerHeight/2, clx = lx, cly = ly;
+  let tX = 0, tY = 0, rX = 0, rY = 0;
+  const tiltOK = () => canHover && !matchMedia('(max-width:960px)').matches;
+
+  if (canHover) {
+    window.addEventListener('pointermove', e => { lx = e.clientX; ly = e.clientY; }, {passive:true});
+    hero.addEventListener('mousemove', e => {
+      if (!tiltOK()) return;
+      const r = device.getBoundingClientRect();
+      const dx = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width/2)) / (r.width/2)));
+      const dy = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height/2)) / (r.height/2)));
+      tY = dx * 7; tX = -dy * 6;
+    }, {passive:true});
+    hero.addEventListener('mouseleave', () => { tX = 0; tY = 0; });
+  }
+
+  (function loop(){
+    if (canHover) {
+      clx += (lx - clx) * .09; cly += (ly - cly) * .09;
+      light.style.transform = 'translate3d(' + clx + 'px,' + cly + 'px,0) translate(-50%,-50%)';
+      rY += (tY - rY) * .07;   rX += (tX - rX) * .07;
+      if (tiltOK()) device.style.transform = 'rotateX(' + rX.toFixed(2) + 'deg) rotateY(' + rY.toFixed(2) + 'deg)';
+      else device.style.transform = '';
+    }
+    const sy = window.scrollY || 0;
+    ambient.style.transform = 'translateY(' + Math.min(sy * .08, 140) + 'px)';
+    requestAnimationFrame(loop);
+  })();
+
+  /* ---------- glass sheen that follows the pointer ---------- */
+  document.querySelectorAll('.sheen').forEach(el => {
+    el.addEventListener('pointermove', e => {
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+      el.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    }, {passive:true});
+  });
+
+  /* ---------- scroll reveals ---------- */
+  const io = new IntersectionObserver(es => es.forEach(en => {
+    if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+  }), {threshold:.15, rootMargin:'0px 0px -40px'});
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  /* ---------- animated counters ---------- */
+  function countUp(el){
+    const to = +el.dataset.to, from = +(el.dataset.from || 0), dur = 1300;
+    const pre = el.dataset.prefix || '', suf = el.dataset.suffix || '';
+    const t0 = performance.now();
+    (function step(t){
+      const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = pre + Math.round(from + (to - from) * e) + suf;
+      if (p < 1) requestAnimationFrame(step);
+    })(t0);
+  }
+  const ioNum = new IntersectionObserver(es => es.forEach(en => {
+    if (en.isIntersecting) { countUp(en.target); ioNum.unobserve(en.target); }
+  }), {threshold:.5});
+  document.querySelectorAll('[data-count]').forEach(el => ioNum.observe(el));
+
+  /* ---------- toast ---------- */
+  const toastEl = $('#toast'); let toastT;
+  function toast(msg){
+    toastEl.querySelector('span').textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastT);
+    toastT = setTimeout(() => toastEl.classList.remove('show'), 2600);
+  }
+
+  /* ---------- copy username ---------- */
+  $('#copyBtn').addEventListener('click', async () => {
+    const handle = '@onyx_ai_bot';
+    try { await navigator.clipboard.writeText(handle); }
+    catch(e) {
+      const i = document.createElement('input');
+      i.value = handle; document.body.appendChild(i); i.select();
+      document.execCommand('copy'); i.remove();
+    }
+    toast('Username copied — see you inside');
+  });
+
+  /* ================================================================
+     THE LIVE CHAT DEMO
+  ================================================================ */
+  const log = $('#chatLog'), form = $('#chatForm'), field = $('#chatField'),
+        statusText = $('#statusText'), statusWrap = $('#chStatus');
+  let scriptToken = 0, typingEl = null;
+
+  const nowTime = () => {
+    const d = new Date();
+    return d.getHours() + ':' + String(d.getMinutes()).padStart(2,'0');
+  };
+  // tiny safe formatter: **bold** only, built with text nodes (no injection)
+  function renderRich(el, text){
+    let bold = false;
+    String(text).split('**').forEach(part => {
+      if (part !== '') {
+        const n = document.createElement(bold ? 'b' : 'span');
+        n.textContent = part; el.appendChild(n);
+      }
+      bold = !bold;
+    });
+  }
+  function scrollLog(){
+    requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
+  }
+  function trimLog(){
+    while (log.children.length > 60) log.removeChild(log.firstChild);
+  }
+  function setStatus(txt){
+    statusText.textContent = txt;
+    statusWrap.classList.toggle('typing', txt !== 'online');
+  }
+  function addMsg(text, dir){
+    const el = document.createElement('div');
+    el.className = 'msg ' + dir;
+    if (dir === 'system') { el.textContent = text; }
+    else {
+      const body = document.createElement('div'); body.className = 'msg-body';
+      renderRich(body, text); el.appendChild(body);
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.appendChild(document.createTextNode(nowTime()));
+      if (dir === 'out') {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+        svg.setAttribute('viewBox','0 0 16 10'); svg.setAttribute('width','15'); svg.setAttribute('height','10');
+        svg.innerHTML = '<path d="M1 5.5l3 3L9.5 2.5"/><path d="M6.5 5.5l3 3L15 2.5"/>';
+        svg.style.cssText = 'fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle';
+        meta.appendChild(svg);
+      }
+      el.appendChild(meta);
+    }
+    log.appendChild(el); trimLog(); scrollLog();
+    return el;
+  }
+  function showTyping(){
+    typingEl = document.createElement('div');
+    typingEl.className = 'msg in typing';
+    typingEl.innerHTML = '<i></i><i></i><i></i>';
+    log.appendChild(typingEl); scrollLog();
+    setStatus('typing\u2026');
+    return typingEl;
+  }
+  function hideTyping(t){
+    const el = t || typingEl;
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    if (typingEl === el || !t) typingEl = null;
+    setStatus('online');
+  }
+  async function botSay(text, think, token){
+    const t = showTyping();
+    await sleep(think);
+    hideTyping(t);
+    if (token !== undefined && token !== scriptToken) return;   // script was cancelled
+    addMsg(text, 'in');
+  }
+
+  /* --- the local reply engine --- */
+  const REPLIES = [
+    { re:/(^|\s)(hi|hey|hello|yo|hiya|sup|good (morning|evening|afternoon))\b/i, out:'Hey. What are we getting into today?' },
+    { re:/who are you|what are you|your name/i, out:'Onyx — an AI assistant living inside Telegram. No app, no tab, no login. Just this chat.' },
+    { re:/what can you do|help|capabilit|feature/i, out:'Draft and rewrite, translate 40+ languages, summarize links, brainstorm, debug code, plan your day — or just think out loud together. What\u2019s first?' },
+    { re:/translat/i, out:'Send the text and the target language. I\u2019ll keep the tone, not just the words.' },
+    { re:/summar|tl;?dr|article|link/i, out:'Paste it. You\u2019ll get the TL;DR first — ask once more and I\u2019ll go deeper.' },
+    { re:/code|debug|python|javascript|java\b|bug|error|stack/i, out:'Show me the snippet or the stack trace. I read those for fun.' },
+    { re:/email|draft|write|caption|post|essay/i, out:'Give me the audience, the goal and the tone — I\u2019ll hand back something you can send.' },
+    { re:/weather|temperature/i, out:'No sensors on me yet — but anything word-shaped, I\u2019m dangerous with.' },
+    { re:/price|cost|free|paid|subscri/i, out:'Free while in beta. When that changes, existing chats stay free — that\u2019s a promise, not a plan.' },
+    { re:/privacy|private|data|store|track|gdpr/i, out:'Nothing you write trains me. Threads fade when you leave them. No accounts, no email, no wallet.' },
+    { re:/thank|thx|\bty\b/i, out:'Anytime. I\u2019m here 24/7 — literally.' },
+    { re:/bye|goodbye|see you|later|good night/i, out:'See you in the next thread. Just say /start when you\u2019re back.' },
+    { re:/love|marry|awesome|amazing|great|best/i, out:'Careful — I\u2019m a language model, but I blush in binary.' }
+  ];
+  const FALLBACKS = [
+    'Interesting. Give me one more sentence of context and I\u2019ll sharpen that.',
+    'I can work with it — do you want the short version or the deep one?',
+    'Alright. Want me to draft it, debate it, or break it down step by step?',
+    'Now that\u2019s a thread worth pulling. What\u2019s the goal behind the question?',
+    'Noted. Ask me to expand, translate, or rewrite it — that\u2019s where I earn my keep.'
+  ];
+  let fbIdx = 0;
+
+  // minimal recursive-descent calculator (no eval)
+  function calc(str){
+    str = str.replace(/\s+/g,'').replace(/\u00d7/g,'*').replace(/\u00f7/g,'/').replace(/,/g,'');
+    if (!/^[-+*/().\d]+$/.test(str) || !/\d/.test(str)) return null;
+    let i = 0;
+    const peek = () => str[i];
+    function factor(){
+      if (peek() === '(') { i++; const v = expr(); if (peek() !== ')') throw 0; i++; return v; }
+      if (peek() === '-') { i++; return -factor(); }
+      if (peek() === '+') { i++; return factor(); }
+      const st = i;
+      while (i < str.length && /[\d.]/.test(str[i])) i++;
+      if (st === i) throw 0;
+      return parseFloat(str.slice(st, i));
+    }
+    function term(){
+      let v = factor();
+      while (peek() === '*' || peek() === '/') { const op = str[i++]; const r = factor(); v = op === '*' ? v * r : v / r; }
+      return v;
+    }
+    function expr(){
+      let v = term();
+      while (peek() === '+' || peek() === '-') { const op = str[i++]; const r = term(); v = op === '+' ? v + r : v - r; }
+      return v;
+    }
+    try {
+      const v = expr();
+      if (i !== str.length || !isFinite(v)) return null;
+      return Math.round(v * 1e6) / 1e6;
+    } catch(e) { return null; }
+  }
+
+  function computeReply(input){
+    const cleaned = input.replace(/[?=\s]+$/,'');
+    const n = calc(cleaned);
+    if (n !== null && /[-+*/(\u00d7\u00f7]/.test(cleaned)) {
+      return 'That\u2019d be **' + n + '**. Care to make it harder?';
+    }
+    for (const r of REPLIES) if (r.re.test(input)) return r.out;
+    return FALLBACKS[fbIdx++ % FALLBACKS.length];
+  }
+
+  /* --- the opening script --- */
+  async function runScript(){
+    const my = ++scriptToken;
+    log.innerHTML = '';
+    await sleep(700);  if (my !== scriptToken) return;
+    await botSay('Hey — I\u2019m **Onyx**. Think of me as a friend who\u2019s read a little too much.', 1000, my);
+    if (my !== scriptToken) return;
+    await sleep(850);  if (my !== scriptToken) return;
+    addMsg('What can you actually do?', 'out');
+    await sleep(500);  if (my !== scriptToken) return;
+    await botSay('Draft emails, translate **40+ languages**, summarize links, debug code\u2026 or just think out loud with you.', 1200, my);
+    if (my !== scriptToken) return;
+    await sleep(900);  if (my !== scriptToken) return;
+    addMsg('Prove it. TL;DR of a 4,000-word article — one line.', 'out');
+    await sleep(450);  if (my !== scriptToken) return;
+    await botSay('Done — **\u201cMost productivity advice fails because it optimizes the plan instead of the environment.\u201d** Want the bullet points?', 1400, my);
+    if (my !== scriptToken) return;
+    await sleep(750);  if (my !== scriptToken) return;
+    addMsg('You\u2019re in the live demo — type below and I\u2019ll answer for real.', 'system');
+  }
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const v = field.value.trim();
+    if (!v) return;
+    scriptToken++;                       // cancel any pending script
+    hideTyping();
+    field.value = '';
+    addMsg(v, 'out');
+    const reply = computeReply(v);
+    const t = showTyping();
+    await sleep(550 + Math.random() * 850);
+    hideTyping(t);
+    addMsg(reply, 'in');
+  });
+
+  $('#replayBtn').addEventListener('click', () => {
+    runScript();
+    if (matchMedia('(max-width:960px)').matches) {
+      $('#device').scrollIntoView({behavior:'smooth', block:'center'});
+    }
+  });
+
+  runScript();
+})();
+</script>
+</body>
+</html>
